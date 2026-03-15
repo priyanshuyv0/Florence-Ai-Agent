@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Florence Medical Pharmacy – Voice Assistant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --navy:#0b1f3a; --teal-glow:rgba(15,126,166,0.35); --white:#ffffff; --text-muted:#7a8fa6; --gold:#c9a84c; }
+    html, body { height:100%; font-family:'DM Sans',sans-serif; background:var(--navy); overflow:hidden; }
+    #bg-canvas { position:fixed; inset:0; z-index:0; pointer-events:none; }
+    .ambient { position:fixed; width:700px; height:700px; border-radius:50%; background:radial-gradient(circle,rgba(15,126,166,0.12) 0%,transparent 70%); top:50%; left:50%; transform:translate(-50%,-60%); z-index:0; pointer-events:none; }
+    .page { position:relative; z-index:1; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:2.5rem 1.5rem 3rem; }
+    header { text-align:center; }
+    .logo-line { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:6px; }
+    header h1 { font-family:'Cormorant Garamond',serif; font-size:clamp(1.6rem,4vw,2.2rem); font-weight:600; color:var(--white); letter-spacing:.04em; }
+    header p { font-size:.78rem; font-weight:300; color:var(--text-muted); letter-spacing:.18em; text-transform:uppercase; }
+    .divider { width:48px; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:10px auto 0; }
+    .orb-wrap { display:flex; flex-direction:column; align-items:center; gap:2rem; }
+    .orb-container { position:relative; width:200px; height:200px; display:flex; align-items:center; justify-content:center; }
+    .ring { position:absolute; border-radius:50%; border:1px solid var(--teal-glow); animation:ring-expand 3s ease-out infinite; opacity:0; width:100%; height:100%; }
+    .ring:nth-child(2){animation-delay:1s;} .ring:nth-child(3){animation-delay:2s;}
+    @keyframes ring-expand{0%{transform:scale(1);opacity:.5;}100%{transform:scale(1.9);opacity:0;}}
+    .orb-container.speaking .ring{border-color:rgba(23,164,212,.5);animation-duration:1.2s;}
+    .orb { width:130px; height:130px; border-radius:50%; background:radial-gradient(circle at 38% 38%,#1db3e0,#0b6a8c 55%,#063952); box-shadow:0 0 0 2px rgba(15,126,166,.4),0 0 40px rgba(15,126,166,.3),inset 0 0 30px rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; position:relative; transition:box-shadow .3s ease; }
+    .orb-container.speaking .orb{box-shadow:0 0 0 3px rgba(23,164,212,.6),0 0 60px rgba(23,164,212,.5),inset 0 0 30px rgba(0,0,0,.3);animation:orb-pulse .6s ease-in-out infinite alternate;}
+    @keyframes orb-pulse{from{transform:scale(1);}to{transform:scale(1.04);}}
+    .orb::before{content:'';position:absolute;top:18%;left:22%;width:35%;height:25%;background:radial-gradient(ellipse,rgba(255,255,255,.25) 0%,transparent 80%);border-radius:50%;}
+    .wave-bars{display:flex;align-items:center;gap:4px;height:36px;}
+    .bar{width:4px;border-radius:2px;background:rgba(255,255,255,.85);height:6px;}
+    .orb-container.speaking .bar:nth-child(1){animation:wave .9s ease-in-out infinite alternate 0.00s;}
+    .orb-container.speaking .bar:nth-child(2){animation:wave .9s ease-in-out infinite alternate 0.10s;}
+    .orb-container.speaking .bar:nth-child(3){animation:wave .9s ease-in-out infinite alternate 0.20s;}
+    .orb-container.speaking .bar:nth-child(4){animation:wave .9s ease-in-out infinite alternate 0.30s;}
+    .orb-container.speaking .bar:nth-child(5){animation:wave .9s ease-in-out infinite alternate 0.15s;}
+    .orb-container.speaking .bar:nth-child(6){animation:wave .9s ease-in-out infinite alternate 0.05s;}
+    .orb-container.speaking .bar:nth-child(7){animation:wave .9s ease-in-out infinite alternate 0.25s;}
+    @keyframes wave{from{height:5px;opacity:.5;}to{height:30px;opacity:1;}}
+    .status-badge{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:100px;padding:6px 16px;font-size:.78rem;color:var(--text-muted);letter-spacing:.06em;transition:all .4s ease;max-width:300px;}
+    .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0;transition:background .4s ease;}
+    .status-badge.active{color:#5fe0c0;border-color:rgba(95,224,192,.25);background:rgba(95,224,192,.08);}
+    .status-badge.active .status-dot{background:#5fe0c0;box-shadow:0 0 8px #5fe0c0;animation:dot-blink 1s ease-in-out infinite;}
+    .status-badge.speaking-status{color:#17d4ff;border-color:rgba(23,212,255,.3);background:rgba(23,212,255,.08);}
+    .status-badge.speaking-status .status-dot{background:#17d4ff;box-shadow:0 0 8px #17d4ff;}
+    .status-badge.error-status{color:#ff7c7c;border-color:rgba(255,124,124,.25);background:rgba(255,124,124,.08);}
+    .status-badge.error-status .status-dot{background:#ff7c7c;}
+    @keyframes dot-blink{0%,100%{opacity:1;}50%{opacity:.4;}}
+    .controls{display:flex;flex-direction:column;align-items:center;gap:1rem;}
+    .btn-call{width:72px;height:72px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f7ea6,#17a4d4);box-shadow:0 4px 24px rgba(15,126,166,.4);transition:all .25s ease;animation:idle-glow 2.5s ease-in-out infinite;position:relative;overflow:hidden;}
+    @keyframes idle-glow{0%,100%{box-shadow:0 4px 24px rgba(15,126,166,.4),0 0 0 0 rgba(15,126,166,.4);}50%{box-shadow:0 4px 32px rgba(15,126,166,.6),0 0 0 10px rgba(15,126,166,.1);}}
+    .btn-call:hover{transform:scale(1.07);}.btn-call:active{transform:scale(.96);}
+    .btn-call.btn-end{background:linear-gradient(135deg,#b83232,#d64545);box-shadow:0 4px 24px rgba(214,69,69,.4);animation:none;}
+    .btn-call:disabled{opacity:.45;cursor:not-allowed;animation:none;transform:none!important;}
+    .connecting-ring{position:absolute;width:100%;height:100%;border-radius:50%;border:2px solid transparent;border-top-color:rgba(255,255,255,.8);animation:spin .9s linear infinite;display:none;}
+    .btn-call.connecting .connecting-ring{display:block;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .btn-label{font-size:.72rem;color:var(--text-muted);letter-spacing:.12em;text-transform:uppercase;}
+    .icon{width:28px;height:28px;}
+    .mic-overlay{position:fixed;inset:0;z-index:100;background:rgba(4,12,26,.88);display:flex;align-items:center;justify-content:center;padding:2rem;backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .3s ease;}
+    .mic-overlay.visible{opacity:1;pointer-events:all;}
+    .mic-card{background:#0e2540;border:1px solid rgba(15,126,166,.35);border-radius:20px;padding:2rem 1.75rem;max-width:320px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+    .mic-icon-wrap{width:64px;height:64px;border-radius:50%;background:rgba(15,126,166,.15);border:1px solid rgba(15,126,166,.3);display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;}
+    .mic-card h2{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;color:var(--white);margin-bottom:.6rem;}
+    .mic-card p{font-size:.82rem;color:var(--text-muted);line-height:1.6;margin-bottom:1.5rem;}
+    .btn-allow{width:100%;padding:.75rem;border-radius:100px;border:none;background:linear-gradient(135deg,#0f7ea6,#17a4d4);color:white;font-family:'DM Sans',sans-serif;font-size:.9rem;font-weight:500;cursor:pointer;letter-spacing:.04em;transition:all .2s ease;margin-bottom:.75rem;}
+    .btn-deny{background:none;border:none;color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:.78rem;cursor:pointer;letter-spacing:.06em;padding:.25rem;transition:color .2s;}
+    .btn-deny:hover{color:#ff7c7c;}
+    .mic-denied-box{background:rgba(255,124,124,.08);border:1px solid rgba(255,124,124,.2);border-radius:12px;padding:.9rem 1rem;font-size:.76rem;color:#ff9e9e;line-height:1.55;display:none;margin-top:.75rem;text-align:left;}
+    .debug-box{position:fixed;bottom:1rem;left:1rem;right:1rem;background:rgba(0,0,0,.85);border:1px solid rgba(255,100,100,.4);border-radius:10px;padding:.65rem .9rem;font-size:.68rem;color:#ff9e9e;font-family:monospace;line-height:1.5;z-index:300;display:none;word-break:break-all;}
+    footer{font-size:.68rem;color:rgba(122,143,166,.5);letter-spacing:.1em;text-align:center;text-transform:uppercase;}
+  </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div class="ambient"></div>
+<div class="debug-box" id="debugBox"></div>
+
+<div class="mic-overlay" id="micOverlay">
+  <div class="mic-card">
+    <div class="mic-icon-wrap">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect x="10" y="2" width="8" height="14" rx="4" fill="#17a4d4"/>
+        <path d="M5 13c0 4.97 4.03 9 9 9s9-4.03 9-9" stroke="#17a4d4" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="22" x2="14" y2="26" stroke="#17a4d4" stroke-width="2" stroke-linecap="round"/>
+        <line x1="10" y1="26" x2="18" y2="26" stroke="#17a4d4" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h2>Microphone Access</h2>
+    <p>Florence AI needs your microphone to hear you. Please tap Allow when your browser prompts you.</p>
+    <button class="btn-allow" onclick="requestMicPermission()">Allow Microphone</button><br/>
+    <button class="btn-deny" onclick="closeMicOverlay()">Not now</button>
+    <div class="mic-denied-box" id="micDeniedBox">Microphone blocked. Tap the lock icon in your address bar → enable Microphone → refresh.</div>
+  </div>
+</div>
+
+<div class="page">
+  <header>
+    <div class="logo-line">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="8" y="0" width="6" height="22" rx="3" fill="#c9a84c"/>
+        <rect x="0" y="8" width="22" height="6" rx="3" fill="#c9a84c"/>
+      </svg>
+      <h1>Florence Medical Pharmacy</h1>
+    </div>
+    <p>AI Voice Assistant</p>
+    <div class="divider"></div>
+  </header>
+
+  <div class="orb-wrap">
+    <div class="orb-container" id="orbContainer">
+      <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+      <div class="orb">
+        <div class="wave-bars">
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="status-badge" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">Loading assistant…</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-call" id="callBtn" onclick="handleCallButton()" disabled>
+      <div class="connecting-ring"></div>
+      <svg class="icon" id="btnIcon" viewBox="0 0 28 28" fill="none">
+        <rect x="10" y="2" width="8" height="14" rx="4" fill="white"/>
+        <path d="M5 13c0 4.97 4.03 9 9 9s9-4.03 9-9" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="14" y1="22" x2="14" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="10" y1="26" x2="18" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <span class="btn-label" id="btnLabel">Tap to speak</span>
+  </div>
+
+  <p style="font-size:.72rem; color:rgba(122,143,166,0.55); text-align:center; letter-spacing:.04em; padding: 0 1rem;">
+    🔴 Calls may be recorded for quality &amp; security purposes
+  </p>
+
+  <footer>Powered by Florence AI · Secure &amp; Private</footer>
+</div>
+
+<script>
+  const VAPI_PUBLIC_KEY = "49aa0c63-9265-4cf7-9a86-4aace460520f";
+  const ASSISTANT_ID    = "987e0894-4444-40f4-93b8-1b2ee62c9e67";
+
+  let vapiInstance = null;
+  let callActive   = false;
+  let micGranted   = false;
+
+  function showDebug(msg) {
+    const b = document.getElementById("debugBox");
+    b.style.display = "block";
+    b.textContent   = "⚠ " + msg;
+    console.error("[Vapi]", msg);
+  }
+
+  /* ── Official Vapi html-script-tag SDK loader ── */
+  (function(d, t) {
+    var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
+    g.src   = "https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js";
+    g.defer = true;
+    g.async = true;
+    s.parentNode.insertBefore(g, s);
+    g.onload  = vapiSDKReady;
+    g.onerror = function() {
+      showDebug("CDN blocked or offline. Try Netlify/Vercel hosting.");
+      setStatus("error","SDK failed to load"); 
+      document.getElementById("btnLabel").textContent = "Unavailable";
+    };
+  })(document, "script");
+
+  function vapiSDKReady() {
+    try {
+      /* window.vapiSDK is exposed by the official html-script-tag build */
+      vapiInstance = window.vapiSDK.run({
+        apiKey:    VAPI_PUBLIC_KEY,
+        assistant: ASSISTANT_ID,
+        config: {
+          /* Hide the built-in button — we're using our own custom UI */
+          position: "bottom-right",
+          offset:   "0px",
+          width:    "1px",
+          height:   "1px",
+          idle:    { color:"rgba(0,0,0,0)", type:"pill", label:"", icon:"" },
+          active:  { color:"rgba(0,0,0,0)", type:"pill", label:"", icon:"" },
+          loading: { color:"rgba(0,0,0,0)", type:"pill", label:"", icon:"" }
+        }
+      });
+
+      vapiInstance.on("call-start",   ()  => { setButtonState("active"); setStatus("connected","Connected — listening…"); });
+      vapiInstance.on("call-end",     ()  => { callActive=false; setSpeaking(false); setButtonState("idle"); setStatus("idle","Ready to assist"); });
+      vapiInstance.on("speech-start", ()  => setSpeaking(true));
+      vapiInstance.on("speech-end",   ()  => setSpeaking(false));
+      vapiInstance.on("error",        (e) => {
+        const msg = e?.message || e?.error?.message || JSON.stringify(e) || "Unknown";
+        showDebug("Vapi error: " + msg);
+        callActive = false; setButtonState("idle"); setStatus("error","Error — see bar below");
+      });
+
+      checkMicPermission().then(() => {
+        document.getElementById("callBtn").disabled = false;
+        setStatus("idle","Ready to assist");
+      });
+
+    } catch(err) {
+      showDebug("Init failed: " + err.message);
+      setStatus("error","Init failed");
+    }
+  }
+
+  /* ── Microphone ── */
+  async function checkMicPermission() {
+    if (!navigator.permissions) { micGranted = true; return; }
+    try { const r = await navigator.permissions.query({name:"microphone"}); micGranted = (r.state === "granted"); }
+    catch(e) { micGranted = false; }
+  }
+
+  function showMicOverlay() { document.getElementById("micOverlay").classList.add("visible"); }
+  function closeMicOverlay() { document.getElementById("micOverlay").classList.remove("visible"); document.getElementById("micDeniedBox").style.display="none"; }
+
+  async function requestMicPermission() {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({audio:true});
+      s.getTracks().forEach(t=>t.stop());
+      micGranted = true; closeMicOverlay(); setStatus("idle","Ready to assist"); startCall();
+    } catch(e) {
+      micGranted = false;
+      document.getElementById("micDeniedBox").style.display = "block";
+      setStatus("error","Microphone blocked");
+      showDebug("Mic denied: " + e.message);
+    }
+  }
+
+  /* ── Call controls ── */
+  async function handleCallButton() {
+    if (!vapiInstance) { showDebug("SDK still loading, please wait…"); return; }
+    if (callActive)    { endCall(); return; }
+    if (!micGranted)   { showMicOverlay(); return; }
+    startCall();
+  }
+
+  async function startCall() {
+    callActive = true; setButtonState("connecting"); setStatus("idle","Connecting…");
+    try {
+      await vapiInstance.start(ASSISTANT_ID);
+    } catch(e) {
+      showDebug("start() failed: " + (e?.message || JSON.stringify(e)));
+      callActive = false; setButtonState("idle"); setStatus("error","Failed — see bar below");
+    }
+  }
+
+  function endCall() {
+    try { vapiInstance.stop(); } catch(e) {}
+    callActive = false; setSpeaking(false); setButtonState("idle"); setStatus("idle","Ready to assist");
+  }
+
+  /* ── UI state ── */
+  function setButtonState(s) {
+    const btn=document.getElementById("callBtn"),icon=document.getElementById("btnIcon"),lbl=document.getElementById("btnLabel");
+    btn.classList.remove("btn-end","connecting"); btn.disabled=false;
+    if (s==="connecting") { btn.classList.add("connecting"); icon.style.opacity="0"; lbl.textContent="Connecting…"; }
+    else if (s==="active") { btn.classList.add("btn-end"); icon.style.opacity="1"; icon.innerHTML=`<line x1="7" y1="7" x2="21" y2="21" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="21" y1="7" x2="7" y2="21" stroke="white" stroke-width="2.5" stroke-linecap="round"/>`; lbl.textContent="End call"; }
+    else { icon.style.opacity="1"; icon.innerHTML=`<rect x="10" y="2" width="8" height="14" rx="4" fill="white"/><path d="M5 13c0 4.97 4.03 9 9 9s9-4.03 9-9" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="14" y1="22" x2="14" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="10" y1="26" x2="18" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>`; lbl.textContent="Tap to speak"; }
+  }
+
+  function setStatus(type, text) {
+    const badge=document.getElementById("statusBadge"),txt=document.getElementById("statusText");
+    badge.className="status-badge";
+    const map={connected:["active","Listening…"],speaking:["speaking-status","Assistant speaking"],error:["error-status","Error"],idle:["","Ready to assist"]};
+    const [cls,fb]=map[type]||map.idle; if(cls) badge.classList.add(cls); txt.textContent=text||fb;
+  }
+
+  function setSpeaking(on) {
+    const orb=document.getElementById("orbContainer");
+    if(on){orb.classList.add("speaking");setStatus("speaking");}
+    else{orb.classList.remove("speaking");if(callActive)setStatus("connected","Listening…");}
+  }
+
+  /* ── Particle background ── */
+  (function(){
+    const c=document.getElementById("bg-canvas"),ctx=c.getContext("2d");let W,H,p=[];
+    function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+    function spawn(){p=[];for(let i=0;i<55;i++)p.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.4+.3,dx:(Math.random()-.5)*.18,dy:(Math.random()-.5)*.18,o:Math.random()*.4+.1});}
+    function draw(){ctx.clearRect(0,0,W,H);for(let q of p){ctx.beginPath();ctx.arc(q.x,q.y,q.r,0,Math.PI*2);ctx.fillStyle=`rgba(15,126,166,${q.o})`;ctx.fill();q.x+=q.dx;q.y+=q.dy;if(q.x<0)q.x=W;if(q.x>W)q.x=0;if(q.y<0)q.y=H;if(q.y>H)q.y=0;}requestAnimationFrame(draw);}
+    window.addEventListener("resize",()=>{resize();spawn();}); resize();spawn();draw();
+  })();
+</script>
+
+</body>
+</html>
